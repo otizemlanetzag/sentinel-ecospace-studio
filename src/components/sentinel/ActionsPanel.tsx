@@ -1,4 +1,5 @@
 import { Circle, Square, Activity, Clock } from "lucide-react";
+import { CarbonTracker } from "./CarbonTracker";
 
 export interface RecordedAction {
   id: string;
@@ -10,10 +11,14 @@ export function ActionsPanel({
   recording,
   actions,
   onToggle,
+  co2,
+  credits,
 }: {
   recording: boolean;
   actions: RecordedAction[];
   onToggle: () => void;
+  co2: number;
+  credits: number;
 }) {
   return (
     <aside className="flex h-full w-80 shrink-0 flex-col border-l border-border bg-panel">
