@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
+import { toast } from "sonner";
 import { Shield, Play, Save } from "lucide-react";
 import {
   ComponentPalette,
@@ -25,7 +26,6 @@ export const Route = createFileRoute("/")({
   component: Index,
 });
 
-// Flat catalog used to resolve palette items by id (for drag-and-drop).
 import {
   RectangleHorizontal,
   TextCursorInput,
@@ -53,19 +53,46 @@ const uid = () => `n-${Date.now()}-${counter++}`;
 const stamp = () =>
   new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 
+const CO2_PER_ACTION = 5;
+const BONUS_THRESHOLD = 20;
+const BONUS_AMOUNT = 2;
+
 function Index() {
   const [nodes, setNodes] = useState<CanvasNode[]>([]);
   const [recording, setRecording] = useState(false);
   const [actions, setActions] = useState<RecordedAction[]>([]);
+  const [counts, setCounts] = useState<Record<string, number>>({});
+  const [co2, setCo2] = useState(0);
+  const [credits, setCredits] = useState(0);
 
-  const log = (label: string) => {
-    if (!recording) return;
+  // Records an action AND rewards eco-credits for clean builder activity.
+  const recordAction = (label: string) => {
     setActions((prev) => [...prev, { id: uid(), label, time: stamp() }]);
+
+    setCo2((prevCo2) => {
+      const nextCo2 = prevCo2 + CO2_PER_ACTION;
+      const earnedBefore = Math.floor(prevCo2 / BONUS_THRESHOLD);
+      const earnedAfter = Math.floor(nextCo2 / BONUS_THRESHOLD);
+      if (earnedAfter > earnedBefore) {
+        const gained = (earnedAfter - earnedBefore) * BONUS_AMOUNT;
+        setCredits((c) => c + gained);
+        toast.success(`Eco milestone reached! +${gained} Bonus Credits`, {
+          description: `You've saved ${nextCo2}g of CO₂ building clean. ♻️`,
+        });
+      }
+      return nextCo2;
+    });
   };
 
   const addItem = (item: PaletteItem) => {
-    setNodes((prev) => [...prev, { uid: uid(), item }]);
-    log(`Added ${item.label}`);
+    let name = "";
+    setCounts((prev) => {
+      const next = (prev[item.id] ?? 0) + 1;
+      name = `${item.label}_${next}`;
+      return { ...prev, [item.id]: next };
+    });
+    setNodes((prev) => [...prev, { uid: uid(), name, item }]);
+    if (recording) recordAction(`Added ${name}`);
   };
 
   const handleDrop = (id: string) => {
@@ -76,7 +103,11 @@ function Index() {
   const removeNode = (target: string) => {
     const removed = nodes.find((n) => n.uid === target);
     setNodes((prev) => prev.filter((n) => n.uid !== target));
-    if (removed) log(`Removed ${removed.item.label}`);
+    if (removed && recording) recordAction(`Removed ${removed.name}`);
+  };
+
+  const handleRecordClick = (node: CanvasNode, trigger: string) => {
+    recordAction(`Click on ${node.name} \u2192 ${trigger}`);
   };
 
   const toggleRecording = () => {
@@ -84,7 +115,11 @@ function Index() {
       const next = !r;
       setActions((prev) => [
         ...prev,
-        { id: uid(), label: next ? "Recording started" : "Recording stopped", time: stamp() },
+        {
+          id: uid(),
+          label: next ? "Recording started" : "Recording stopped",
+          time: stamp(),
+        },
       ]);
       return next;
     });
@@ -118,11 +153,19 @@ function Index() {
 
       <div className="flex min-h-0 flex-1">
         <ComponentPalette onAdd={addItem} />
-        <Canvas nodes={nodes} onDropItem={handleDrop} onRemove={removeNode} />
+        <Canvas
+          nodes={nodes}
+          recording={recording}
+          onDropItem={handleDrop}
+          onRemove={removeNode}
+          onRecordClick={handleRecordClick}
+        />
         <ActionsPanel
           recording={recording}
           actions={actions}
           onToggle={toggleRecording}
+          co2={co2}
+          credits={credits}
         />
       </div>
     </div>
