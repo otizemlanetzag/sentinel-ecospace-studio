@@ -60,6 +60,7 @@ const BONUS_THRESHOLD = 20;
 const BONUS_AMOUNT = 2;
 
 function Index() {
+  const { user, signOut } = useAuth();
   const [nodes, setNodes] = useState<CanvasNode[]>([]);
   const [recording, setRecording] = useState(false);
   const [actions, setActions] = useState<RecordedAction[]>([]);
