@@ -1,7 +1,7 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
-import { Shield, Save, Download } from "lucide-react";
+import { Shield, Save, Download, LogIn, LogOut } from "lucide-react";
 import {
   ComponentPalette,
   type PaletteItem,
@@ -12,6 +12,7 @@ import {
   type RecordedAction,
 } from "@/components/sentinel/ActionsPanel";
 import { ExportPanel } from "@/components/sentinel/ExportPanel";
+import { useAuth } from "@/hooks/useAuth";
 
 export const Route = createFileRoute("/")({
   head: () => ({
