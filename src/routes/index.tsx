@@ -146,9 +146,12 @@ function Index() {
             <Save className="h-4 w-4" />
             <span className="hidden sm:inline">Save</span>
           </button>
-          <button className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground transition-transform hover:scale-[1.03]">
-            <Play className="h-4 w-4" />
-            <span className="hidden sm:inline">Preview</span>
+          <button
+            onClick={() => setExportOpen(true)}
+            className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground transition-transform hover:scale-[1.03]"
+          >
+            <Download className="h-4 w-4" />
+            <span className="hidden sm:inline">Export App</span>
           </button>
         </div>
       </header>
