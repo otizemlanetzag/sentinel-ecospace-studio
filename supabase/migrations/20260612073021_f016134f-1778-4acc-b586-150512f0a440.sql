@@ -39,3 +39,15 @@ $$ LANGUAGE plpgsql SET search_path = public;
 CREATE TRIGGER update_user_entitlements_updated_at
 BEFORE UPDATE ON public.user_entitlements
 FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+-- מחיקת חוקי הגישה המסוכנים של המשתמשים
+DROP POLICY IF EXISTS "Allow insert for authenticated users" ON public.user_entitlements;
+DROP POLICY IF EXISTS "Allow update for authenticated users" ON public.user_entitlements;
+DROP POLICY IF EXISTS "Individuals can create entitlements" ON public.user_entitlements;
+DROP POLICY IF EXISTS "Individuals can update entitlements" ON public.user_entitlements;
+
+-- יצירת חוק חדש ומאובטח המאפשר רק לקרוא נתונים
+CREATE POLICY "Users can only read their own entitlements" 
+ON public.user_entitlements 
+FOR SELECT 
+TO authenticated 
+USING (auth.uid() = user_id);
