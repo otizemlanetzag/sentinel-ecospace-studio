@@ -72,6 +72,10 @@ function Index() {
   const [co2, setCo2] = useState(0);
   const [credits, setCredits] = useState(0);
   const [exportOpen, setExportOpen] = useState(false);
+  const [device, setDevice] = useState<DeviceKind>("phone");
+  const [selectedUid, setSelectedUid] = useState<string | null>(null);
+  // Cached active trigger while recording a conditional event.
+  const [activeTriggerUid, setActiveTriggerUid] = useState<string | null>(null);
 
   // Records an action AND rewards eco-credits for clean builder activity.
   const recordAction = (label: string) => {
