@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
-import { Shield, Play, Save } from "lucide-react";
+import { Shield, Save, Download } from "lucide-react";
 import {
   ComponentPalette,
   type PaletteItem,
@@ -11,6 +11,7 @@ import {
   ActionsPanel,
   type RecordedAction,
 } from "@/components/sentinel/ActionsPanel";
+import { ExportPanel } from "@/components/sentinel/ExportPanel";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -64,6 +65,7 @@ function Index() {
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [co2, setCo2] = useState(0);
   const [credits, setCredits] = useState(0);
+  const [exportOpen, setExportOpen] = useState(false);
 
   // Records an action AND rewards eco-credits for clean builder activity.
   const recordAction = (label: string) => {
@@ -144,9 +146,12 @@ function Index() {
             <Save className="h-4 w-4" />
             <span className="hidden sm:inline">Save</span>
           </button>
-          <button className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground transition-transform hover:scale-[1.03]">
-            <Play className="h-4 w-4" />
-            <span className="hidden sm:inline">Preview</span>
+          <button
+            onClick={() => setExportOpen(true)}
+            className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground transition-transform hover:scale-[1.03]"
+          >
+            <Download className="h-4 w-4" />
+            <span className="hidden sm:inline">Export App</span>
           </button>
         </div>
       </header>
@@ -168,6 +173,13 @@ function Index() {
           credits={credits}
         />
       </div>
+
+      <ExportPanel
+        open={exportOpen}
+        nodes={nodes}
+        appName="Untitled Project"
+        onClose={() => setExportOpen(false)}
+      />
     </div>
   );
 }
