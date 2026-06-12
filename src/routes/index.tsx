@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
-import { Shield, Play, Save, Download } from "lucide-react";
+import { Shield, Save, Download } from "lucide-react";
 import {
   ComponentPalette,
   type PaletteItem,
