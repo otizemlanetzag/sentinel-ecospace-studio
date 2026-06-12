@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import JSZip from "jszip";
 import { toast } from "sonner";
+import { useServerFn } from "@tanstack/react-start";
 import {
   X,
   Globe,
@@ -14,6 +15,8 @@ import {
   ExternalLink,
   ShieldCheck,
   Loader2,
+  Upload,
+  Sparkles,
 } from "lucide-react";
 import type { CanvasNode } from "./Canvas";
 import {
@@ -21,12 +24,14 @@ import {
   generateAndroidApp,
   type ExportNode,
 } from "@/lib/export/generateProject";
+import { verifyReceiptWithAI } from "@/lib/verifyReceipt.functions";
 
 const DONATION_URL = "https://teamtrees.org";
 const ENTITLEMENT_KEY = "sentinel_user_entitlements";
 const SIXTY_DAYS_MS = 60 * 24 * 60 * 60 * 1000;
+const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 
-type Entitlement = { paid_until: number; receipt: string } | null;
+type Entitlement = { paid_until: number } | null;
 
 type PremiumPlatform = "ios" | "mac" | "windows";
 
@@ -43,40 +48,13 @@ function readEntitlement(): Entitlement {
   return null;
 }
 
-/**
- * verifyTreeDonation — honor-based receipt sanity check.
- *
- * NOTE: Team Trees does not expose a public receipt-verification API, so this
- * cannot cryptographically confirm a real donation. It validates the format,
- * rejects empty / repeated / already-used values, and simulates an async
- * verification call. It is an honor-system unlock, not fraud-proof.
- */
-export async function verifyTreeDonation(
-  rawInput: string,
-): Promise<{ ok: boolean; reason?: string }> {
-  const input = rawInput.trim();
-
-  if (!input) return { ok: false, reason: "Please enter your transaction ID." };
-  if (input.length < 6 || input.length > 64)
-    return { ok: false, reason: "Transaction ID should be 6–64 characters." };
-  if (!/^[A-Za-z0-9][A-Za-z0-9_-]+$/.test(input))
-    return {
-      ok: false,
-      reason: "Use only letters, numbers, hyphens and underscores.",
-    };
-  // Reject obviously fake repeated values like "aaaaaa" or "111111".
-  if (/^(.)\1+$/.test(input))
-    return { ok: false, reason: "That doesn't look like a real receipt number." };
-
-  // Reject a receipt that was already used to unlock.
-  const existing = readEntitlement();
-  if (existing && existing.receipt === input)
-    return { ok: false, reason: "This receipt has already been redeemed." };
-
-  // Simulate an asynchronous verification round-trip.
-  await new Promise((r) => setTimeout(r, 1100));
-
-  return { ok: true };
+function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(new Error("Could not read file"));
+    reader.readAsDataURL(file);
+  });
 }
 
 function toExportNodes(nodes: CanvasNode[]): ExportNode[] {
@@ -126,10 +104,14 @@ export function ExportPanel({
   appName: string;
   onClose: () => void;
 }) {
+  const verifyReceipt = useServerFn(verifyReceiptWithAI);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [entitlement, setEntitlement] = useState<Entitlement>(() =>
     readEntitlement(),
   );
-  const [receipt, setReceipt] = useState("");
+  const [preview, setPreview] = useState<string | null>(null);
+  const [fileName, setFileName] = useState<string | null>(null);
+  const [dataUrl, setDataUrl] = useState<string | null>(null);
   const [verifying, setVerifying] = useState(false);
 
   if (!open) return null;
@@ -153,36 +135,62 @@ export function ExportPanel({
   const goDonate = () => {
     window.open(DONATION_URL, "_blank", "noopener");
     toast("Plant 5 trees on Team Trees 🌳", {
-      description: "Then paste your receipt number below to unlock.",
+      description: "Then upload your receipt image to verify with AI.",
     });
   };
 
-  const handleVerify = async () => {
-    setVerifying(true);
-    const result = await verifyTreeDonation(receipt);
-    setVerifying(false);
-
-    if (!result.ok) {
-      toast.error("Verification failed", { description: result.reason });
+  const handleFile = async (file: File | undefined) => {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please upload an image of your receipt.");
       return;
     }
+    if (file.size > MAX_IMAGE_BYTES) {
+      toast.error("Image too large", { description: "Max 8 MB." });
+      return;
+    }
+    try {
+      const url = await fileToDataUrl(file);
+      setDataUrl(url);
+      setPreview(url);
+      setFileName(file.name);
+    } catch {
+      toast.error("Could not read that image.");
+    }
+  };
 
-    const next: Entitlement = {
-      paid_until: Date.now() + SIXTY_DAYS_MS,
-      receipt: receipt.trim(),
-    };
-    localStorage.setItem(ENTITLEMENT_KEY, JSON.stringify(next));
-    setEntitlement(next);
-    setReceipt("");
-    toast.success("Donation verified — premium unlocked! 🌲", {
-      description: "iOS, Mac & Windows exports are enabled for 60 days.",
-    });
+  const handleVerify = async () => {
+    if (!dataUrl) {
+      toast.error("Upload your receipt image first.");
+      return;
+    }
+    setVerifying(true);
+    try {
+      const result = await verifyReceipt({ data: { imageDataUrl: dataUrl } });
+      if (!result.verified) {
+        toast.error("Receipt not verified", { description: result.reason });
+        return;
+      }
+      const next: Entitlement = { paid_until: Date.now() + SIXTY_DAYS_MS };
+      localStorage.setItem(ENTITLEMENT_KEY, JSON.stringify(next));
+      setEntitlement(next);
+      setPreview(null);
+      setDataUrl(null);
+      setFileName(null);
+      toast.success("Donation verified by AI — premium unlocked! 🌲", {
+        description: "iOS, Mac & Windows exports are enabled for 60 days.",
+      });
+    } catch {
+      toast.error("Verification failed", { description: "Please try again." });
+    } finally {
+      setVerifying(false);
+    }
   };
 
   const exportPremium = async (platform: PremiumPlatform) => {
     if (!paid) {
       toast("Donate to unlock", {
-        description: "Plant trees and verify your receipt to enable this export.",
+        description: "Upload and verify your receipt to enable this export.",
       });
       return;
     }
@@ -240,7 +248,7 @@ export function ExportPanel({
             </button>
           </div>
 
-          {/* Premium platforms — unlocked via Team Trees donation */}
+          {/* Premium platforms — unlocked via AI-verified Team Trees donation */}
           <div className="overflow-hidden rounded-xl border border-primary/30 bg-gradient-to-br from-primary/10 via-card to-card">
             <div className="flex items-center gap-2 border-b border-border/60 px-4 py-3">
               <TreePine className="h-4 w-4 text-primary" />
@@ -294,8 +302,8 @@ export function ExportPanel({
                 <p className="text-xs leading-relaxed text-muted-foreground">
                   Donate <span className="font-semibold text-foreground">$5</span> to
                   plant <span className="font-semibold text-foreground">5 trees</span>{" "}
-                  on Team Trees, then verify your receipt to unlock iOS, Mac &
-                  Windows exports for 60 days.
+                  on Team Trees, then upload your receipt — our built-in AI verifies
+                  it and unlocks iOS, Mac & Windows exports for 60 days.
                 </p>
 
                 <button
@@ -306,46 +314,67 @@ export function ExportPanel({
                   <ExternalLink className="h-3.5 w-3.5 opacity-70" />
                 </button>
 
-                <div className="space-y-1.5">
-                  <label
-                    htmlFor="tree-receipt"
-                    className="text-xs font-medium text-foreground"
-                  >
-                    Enter your official Team Trees Transaction ID/Receipt Number
-                  </label>
-                  <div className="flex gap-2">
-                    <input
-                      id="tree-receipt"
-                      value={receipt}
-                      onChange={(e) => setReceipt(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && !verifying) handleVerify();
-                      }}
-                      placeholder="e.g. TT-8F3K-92BX"
-                      maxLength={64}
-                      autoComplete="off"
-                      spellCheck={false}
-                      className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground/60 focus:border-primary"
-                    />
+                <div className="space-y-2">
+                  <span className="text-xs font-medium text-foreground">
+                    Upload your official donation receipt
+                  </span>
+
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => handleFile(e.target.files?.[0])}
+                  />
+
+                  {preview ? (
+                    <div className="flex items-center gap-3 rounded-lg border border-border bg-background p-2">
+                      <img
+                        src={preview}
+                        alt="Receipt preview"
+                        className="h-14 w-14 rounded-md object-cover"
+                      />
+                      <span className="flex-1 truncate text-xs text-muted-foreground">
+                        {fileName}
+                      </span>
+                      <button
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={verifying}
+                        className="rounded-md border border-border px-2 py-1 text-xs text-foreground hover:bg-secondary disabled:opacity-60"
+                      >
+                        Change
+                      </button>
+                    </div>
+                  ) : (
                     <button
-                      onClick={handleVerify}
-                      disabled={verifying}
-                      className="flex items-center justify-center gap-1.5 rounded-lg border border-primary bg-primary/10 px-3 py-2 text-sm font-semibold text-primary transition-colors hover:bg-primary/20 disabled:opacity-60"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="flex w-full flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed border-border bg-background/60 px-3 py-5 text-xs text-muted-foreground transition-colors hover:border-primary hover:text-foreground"
                     >
-                      {verifying ? (
-                        <>
-                          <Loader2 className="h-4 w-4 animate-spin" /> Checking
-                        </>
-                      ) : (
-                        <>
-                          <ShieldCheck className="h-4 w-4" /> Verify
-                        </>
-                      )}
+                      <Upload className="h-5 w-5" />
+                      Click to upload receipt image (PNG/JPG, max 8 MB)
                     </button>
-                  </div>
+                  )}
+
+                  <button
+                    onClick={handleVerify}
+                    disabled={verifying || !dataUrl}
+                    className="flex w-full items-center justify-center gap-2 rounded-lg border border-primary bg-primary/10 px-3 py-2.5 text-sm font-semibold text-primary transition-colors hover:bg-primary/20 disabled:opacity-50"
+                  >
+                    {verifying ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" /> AI reviewing
+                        receipt…
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="h-4 w-4" /> Verify with AI
+                      </>
+                    )}
+                  </button>
+
                   <p className="text-[11px] text-muted-foreground/80">
-                    Honor-based check: we validate the receipt format and unlock on
-                    trust — Team Trees has no public receipt API.
+                    Your receipt is analyzed by Lovable AI to confirm a valid $5+
+                    donation before unlocking.
                   </p>
                 </div>
               </div>
