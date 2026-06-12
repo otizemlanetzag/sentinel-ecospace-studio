@@ -108,3 +108,8 @@
     linear-gradient(to bottom, oklch(1 0 0 / 0.04) 1px, transparent 1px);
   background-size: 28px 28px;
 }
+@layer base {
+  #lovable-badge {
+    display: none !important;
+  }
+}
