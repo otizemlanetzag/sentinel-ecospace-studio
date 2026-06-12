@@ -1,7 +1,8 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import JSZip from "jszip";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
+import { Link } from "@tanstack/react-router";
 import {
   X,
   Globe,
@@ -17,6 +18,7 @@ import {
   Loader2,
   Upload,
   Sparkles,
+  LogIn,
 } from "lucide-react";
 import type { CanvasNode } from "./Canvas";
 import {
@@ -24,29 +26,16 @@ import {
   generateAndroidApp,
   type ExportNode,
 } from "@/lib/export/generateProject";
-import { verifyReceiptWithAI } from "@/lib/verifyReceipt.functions";
+import {
+  verifyReceiptWithAI,
+  getMyEntitlement,
+} from "@/lib/verifyReceipt.functions";
+import { useAuth } from "@/hooks/useAuth";
 
 const DONATION_URL = "https://teamtrees.org";
-const ENTITLEMENT_KEY = "sentinel_user_entitlements";
-const SIXTY_DAYS_MS = 60 * 24 * 60 * 60 * 1000;
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 
-type Entitlement = { paid_until: number } | null;
-
 type PremiumPlatform = "ios" | "mac" | "windows";
-
-function readEntitlement(): Entitlement {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = localStorage.getItem(ENTITLEMENT_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as Entitlement;
-    if (parsed && parsed.paid_until > Date.now()) return parsed;
-  } catch {
-    /* ignore malformed entitlement */
-  }
-  return null;
-}
 
 function fileToDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -104,19 +93,41 @@ export function ExportPanel({
   appName: string;
   onClose: () => void;
 }) {
+  const { user, loading: authLoading } = useAuth();
   const verifyReceipt = useServerFn(verifyReceiptWithAI);
+  const fetchEntitlement = useServerFn(getMyEntitlement);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [entitlement, setEntitlement] = useState<Entitlement>(() =>
-    readEntitlement(),
-  );
+
+  const [paidUntil, setPaidUntil] = useState<string | null>(null);
+  const [loadingEntitlement, setLoadingEntitlement] = useState(false);
   const [preview, setPreview] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
   const [dataUrl, setDataUrl] = useState<string | null>(null);
   const [verifying, setVerifying] = useState(false);
 
+  useEffect(() => {
+    if (!open || !user) {
+      setPaidUntil(null);
+      return;
+    }
+    let active = true;
+    setLoadingEntitlement(true);
+    fetchEntitlement()
+      .then((res) => {
+        if (active) setPaidUntil(res.paidUntil);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (active) setLoadingEntitlement(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [open, user, fetchEntitlement]);
+
   if (!open) return null;
 
-  const paid = !!entitlement;
+  const paid = !!paidUntil;
   const slug = appName.toLowerCase().replace(/[^a-z0-9]+/g, "-") || "app";
 
   const exportWeb = async () => {
@@ -171,9 +182,7 @@ export function ExportPanel({
         toast.error("Receipt not verified", { description: result.reason });
         return;
       }
-      const next: Entitlement = { paid_until: Date.now() + SIXTY_DAYS_MS };
-      localStorage.setItem(ENTITLEMENT_KEY, JSON.stringify(next));
-      setEntitlement(next);
+      setPaidUntil(result.paidUntil ?? null);
       setPreview(null);
       setDataUrl(null);
       setFileName(null);
@@ -202,8 +211,8 @@ export function ExportPanel({
     toast.success(`${PREMIUM_TABS.find((t) => t.id === platform)?.label} downloaded`);
   };
 
-  const paidUntilLabel = entitlement
-    ? new Date(entitlement.paid_until).toLocaleDateString()
+  const paidUntilLabel = paidUntil
+    ? new Date(paidUntil).toLocaleDateString()
     : null;
 
   return (
@@ -292,7 +301,24 @@ export function ExportPanel({
               })}
             </div>
 
-            {paid ? (
+            {authLoading || (user && loadingEntitlement) ? (
+              <div className="flex items-center gap-2 border-t border-border/60 px-4 py-4 text-xs text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" /> Checking your access…
+              </div>
+            ) : !user ? (
+              <div className="space-y-3 border-t border-border/60 px-4 py-4">
+                <p className="text-xs leading-relaxed text-muted-foreground">
+                  Sign in to unlock premium iOS, Mac & Windows exports. Your access
+                  is saved to your account and follows you across devices.
+                </p>
+                <Link
+                  to="/auth"
+                  className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2.5 text-sm font-semibold text-primary-foreground shadow-[var(--shadow-glow)] transition-transform hover:scale-[1.01]"
+                >
+                  <LogIn className="h-4 w-4" /> Sign in to continue
+                </Link>
+              </div>
+            ) : paid ? (
               <div className="border-t border-border/60 px-4 py-3 text-xs text-muted-foreground">
                 Thanks for planting trees! Premium access active until{" "}
                 <span className="font-medium text-foreground">{paidUntilLabel}</span>.
