@@ -33,6 +33,7 @@ import {
 import { useAuth } from "@/hooks/useAuth";
 
 const DONATION_URL = "https://teamtrees.org";
+const GREENGEEKS_URL = "https://www.greengeeks.com/";
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 
 type PremiumPlatform = "ios" | "mac" | "windows";
@@ -256,6 +257,16 @@ export function ExportPanel({
               </span>
             </button>
           </div>
+
+          {/* Green Deploy — eco-friendly hosting */}
+          <button
+            onClick={() => window.open(GREENGEEKS_URL, "_blank", "noopener")}
+            className="flex w-full items-center justify-center gap-2 rounded-xl border border-green-600/40 bg-green-600/10 px-4 py-3 text-sm font-semibold text-green-400 transition-colors hover:bg-green-600/20 hover:border-green-500"
+          >
+            <TreePine className="h-4 w-4" />
+            Green Deploy
+            <ExternalLink className="h-3.5 w-3.5 opacity-70" />
+          </button>
 
           {/* Premium platforms — unlocked via AI-verified Team Trees donation */}
           <div className="overflow-hidden rounded-xl border border-primary/30 bg-gradient-to-br from-primary/10 via-card to-card">
