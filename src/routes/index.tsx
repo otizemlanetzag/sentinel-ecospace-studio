@@ -96,6 +96,21 @@ function Index() {
     });
   };
 
+  const defaultText = (item: PaletteItem) => {
+    switch (item.id) {
+      case "button":
+        return "Click me";
+      case "input":
+        return "Enter text…";
+      case "text":
+        return "Text label";
+      case "image":
+        return "Image";
+      default:
+        return item.label;
+    }
+  };
+
   const addItem = (item: PaletteItem) => {
     let name = "";
     setCounts((prev) => {
@@ -103,8 +118,36 @@ function Index() {
       name = `${item.label}_${next}`;
       return { ...prev, [item.id]: next };
     });
-    setNodes((prev) => [...prev, { uid: uid(), name, item }]);
-    if (recording) recordAction(`Added ${name}`);
+    const newUid = uid();
+    const elementId = name.toLowerCase().replace(/[^a-z0-9]+/g, "_");
+
+    // Conditional recording: if recording with a cached trigger, bind this
+    // newly dropped component so it stays hidden until that trigger is clicked.
+    let hiddenUntilTriggerUid: string | null = null;
+    if (recording && activeTriggerUid) {
+      const trigger = nodes.find((n) => n.uid === activeTriggerUid);
+      if (trigger) {
+        hiddenUntilTriggerUid = activeTriggerUid;
+        recordAction(
+          `When ${trigger.name} is clicked \u2192 Dynamically render ${name}`,
+        );
+      }
+    } else if (recording) {
+      recordAction(`Added ${name}`);
+    }
+
+    setNodes((prev) => [
+      ...prev,
+      {
+        uid: newUid,
+        name,
+        item,
+        elementId,
+        text: defaultText(item),
+        bgColor: "",
+        hiddenUntilTriggerUid,
+      },
+    ]);
   };
 
   const handleDrop = (id: string) => {
@@ -114,17 +157,42 @@ function Index() {
 
   const removeNode = (target: string) => {
     const removed = nodes.find((n) => n.uid === target);
-    setNodes((prev) => prev.filter((n) => n.uid !== target));
+    setNodes((prev) =>
+      prev
+        .filter((n) => n.uid !== target)
+        .map((n) =>
+          n.hiddenUntilTriggerUid === target
+            ? { ...n, hiddenUntilTriggerUid: null }
+            : n,
+        ),
+    );
+    if (selectedUid === target) setSelectedUid(null);
+    if (activeTriggerUid === target) setActiveTriggerUid(null);
     if (removed && recording) recordAction(`Removed ${removed.name}`);
   };
 
-  const handleRecordClick = (node: CanvasNode, trigger: string) => {
-    recordAction(`Click on ${node.name} \u2192 ${trigger}`);
+  const updateNode = (target: string, patch: Partial<CanvasNode>) => {
+    setNodes((prev) =>
+      prev.map((n) => (n.uid === target ? { ...n, ...patch } : n)),
+    );
+  };
+
+  // Clicking an element selects it for editing, and (while recording) caches
+  // it as the active trigger for the next dropped component.
+  const handleNodeClick = (node: CanvasNode) => {
+    setSelectedUid((cur) => (cur === node.uid ? null : node.uid));
+    if (recording) {
+      setActiveTriggerUid(node.uid);
+      if (node.item.id === "button") {
+        recordAction(`Trigger set: ${node.name} clicked`);
+      }
+    }
   };
 
   const toggleRecording = () => {
     setRecording((r) => {
       const next = !r;
+      if (!next) setActiveTriggerUid(null);
       setActions((prev) => [
         ...prev,
         {
@@ -136,6 +204,7 @@ function Index() {
       return next;
     });
   };
+
 
   return (
     <div className="flex h-screen w-full flex-col overflow-hidden bg-background">
