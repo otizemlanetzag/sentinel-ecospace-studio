@@ -65,6 +65,7 @@ function Index() {
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [co2, setCo2] = useState(0);
   const [credits, setCredits] = useState(0);
+  const [exportOpen, setExportOpen] = useState(false);
 
   // Records an action AND rewards eco-credits for clean builder activity.
   const recordAction = (label: string) => {
