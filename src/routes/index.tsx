@@ -173,6 +173,13 @@ function Index() {
           credits={credits}
         />
       </div>
+
+      <ExportPanel
+        open={exportOpen}
+        nodes={nodes}
+        appName="Untitled Project"
+        onClose={() => setExportOpen(false)}
+      />
     </div>
   );
 }
