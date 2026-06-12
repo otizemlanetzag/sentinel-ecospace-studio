@@ -1,7 +1,7 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
-import { Shield, Save, Download } from "lucide-react";
+import { Shield, Save, Download, LogIn, LogOut } from "lucide-react";
 import {
   ComponentPalette,
   type PaletteItem,
@@ -12,6 +12,7 @@ import {
   type RecordedAction,
 } from "@/components/sentinel/ActionsPanel";
 import { ExportPanel } from "@/components/sentinel/ExportPanel";
+import { useAuth } from "@/hooks/useAuth";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -59,6 +60,7 @@ const BONUS_THRESHOLD = 20;
 const BONUS_AMOUNT = 2;
 
 function Index() {
+  const { user, signOut } = useAuth();
   const [nodes, setNodes] = useState<CanvasNode[]>([]);
   const [recording, setRecording] = useState(false);
   const [actions, setActions] = useState<RecordedAction[]>([]);
@@ -153,6 +155,27 @@ function Index() {
             <Download className="h-4 w-4" />
             <span className="hidden sm:inline">Export App</span>
           </button>
+          {user ? (
+            <button
+              onClick={() => {
+                signOut();
+                toast("Signed out");
+              }}
+              className="flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-secondary"
+              title={user.email ?? undefined}
+            >
+              <LogOut className="h-4 w-4" />
+              <span className="hidden sm:inline">Sign out</span>
+            </button>
+          ) : (
+            <Link
+              to="/auth"
+              className="flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-secondary"
+            >
+              <LogIn className="h-4 w-4" />
+              <span className="hidden sm:inline">Sign in</span>
+            </Link>
+          )}
         </div>
       </header>
 
