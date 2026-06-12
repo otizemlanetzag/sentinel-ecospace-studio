@@ -261,9 +261,14 @@ function Index() {
         <Canvas
           nodes={nodes}
           recording={recording}
+          device={device}
+          onDeviceChange={setDevice}
           onDropItem={handleDrop}
           onRemove={removeNode}
-          onRecordClick={handleRecordClick}
+          onUpdateNode={updateNode}
+          selectedUid={selectedUid}
+          onNodeClick={handleNodeClick}
+          activeTriggerUid={activeTriggerUid}
         />
         <ActionsPanel
           recording={recording}
