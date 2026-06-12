@@ -6,7 +6,11 @@ import {
   ComponentPalette,
   type PaletteItem,
 } from "@/components/sentinel/ComponentPalette";
-import { Canvas, type CanvasNode } from "@/components/sentinel/Canvas";
+import {
+  Canvas,
+  type CanvasNode,
+  type DeviceKind,
+} from "@/components/sentinel/Canvas";
 import {
   ActionsPanel,
   type RecordedAction,
